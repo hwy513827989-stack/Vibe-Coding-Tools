@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application tracker</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --filled: #e8e8e8;
+      --border: #d0d0d0;
+      --text: #222;
+      --muted: #666;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --danger: #b91c1c;
+      --danger-soft: #fee2e2;
+
+      /* pipeline stage accent colors */
+      --stage-observing: #bfdbfe;
+      --stage-editing: #93c5fd;
+      --stage-submitted: #3b82f6;
+      --stage-passed: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 1.25rem 1.5rem 2rem;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 600;
+      margin: 0 0 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    /* ---------------------------------- */
+    /* Sticky header                       */
+    /* ---------------------------------- */
+
+    .page-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--bg);
+      margin: -1.25rem -1.5rem 1rem;
+      padding: 1.25rem 1.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ---------------------------------- */
+    /* Stats bar                           */
+    /* ---------------------------------- */
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.6rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .stat-card {
+      position: relative;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.7rem 0.5rem 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .stat-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--border);
+    }
+
+    .stat-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .stat-card.total::before { background: var(--text); }
+    .stat-card.observing::before { background: var(--stage-observing); }
+    .stat-card.editing::before { background: var(--stage-editing); }
+    .stat-card.submitted::before { background: var(--stage-submitted); }
+    .stat-card.passed::before { background: var(--stage-passed); }
+    .stat-card.rate::before { background: var(--stage-passed); opacity: 0.5; }
+
+    .stat-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-value.pop {
+      animation: pop 0.28s ease;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(1.18); }
+      100% { transform: scale(1); }
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    /* ---------------------------------- */
+    /* Progress track + legend             */
+    /* ---------------------------------- */
+
+    .progress-track {
+      display: flex;
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: var(--filled);
+      margin-bottom: 0.5rem;
+    }
+
+    .progress-seg {
+      height: 100%;
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+
+    .seg-none { background: transparent; }
+    .seg-observing { background: var(--stage-observing); }
+    .seg-editing { background: var(--stage-editing); }
+    .seg-submitted { background: var(--stage-submitted); }
+    .seg-passed { background: var(--stage-passed); }
+
+    .progress-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.9rem;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 0.9rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-none { background: var(--filled); border: 1px solid var(--border); }
+    .dot-observing { background: var(--stage-observing); }
+    .dot-editing { background: var(--stage-editing); }
+    .dot-submitted { background: var(--stage-submitted); }
+    .dot-passed { background: var(--stage-passed); }
+
+    /* ---------------------------------- */
+    /* Toolbar                              */
+    /* ---------------------------------- */
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .toolbar-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    button {
+      font: inherit;
+      cursor: pointer;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      padding: 0.45rem 0.85rem;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+
+    button:hover {
+      background: #fafafa;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    button.primary {
+      background: var(--text);
+      color: var(--surface);
+      border-color: var(--text);
+    }
+
+    button.primary:hover {
+      opacity: 0.92;
+    }
+
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: var(--surface);
+      padding: 0.35rem 0.55rem;
+      font-size: 12px;
+    }
+
+    button.danger:hover {
+      background: var(--danger-soft);
+    }
+
+    /* ---------------------------------- */
+    /* Table                                */
+    /* ---------------------------------- */
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      min-width: 640px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      padding: 0.5rem 0.65rem;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th:last-child,
+    td:last-child {
+      border-right: none;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    th {
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      background: #fafafa;
+      white-space: nowrap;
+    }
+
+    .name-cell {
+      width: 22%;
+      min-width: 120px;
+      max-width: 200px;
+    }
+
+    .name-display {
+      cursor: text;
+      padding: 2px 4px;
+      margin: -2px -4px;
+      border-radius: 4px;
+      word-break: break-word;
+    }
+
+    .name-display:hover {
+      background: #f0f0f0;
+    }
+
+    .name-display.empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .name-edit {
+      width: 100%;
+      font: inherit;
+      padding: 4px 6px;
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      outline: none;
+    }
+
+    .name-cell.editing .url-row {
+      display: block;
+    }
+
+    .name-cell:not(.editing) .url-row {
+      display: none;
+    }
+
+    .name-cell.editing .name-link {
+      display: none;
+    }
+
+    .url-row {
+      margin-top: 0.4rem;
+    }
+
+    .url-row label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .url-input {
+      width: 100%;
+      font: inherit;
+      font-size: 12px;
+      padding: 4px 6px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+    }
+
+    .url-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .name-link {
+      display: inline-block;
+      margin-top: 0.35rem;
+      font-size: 12px;
+    }
+
+    .name-link a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .name-link a:hover {
+      text-decoration: underline;
+    }
+
+    .date-cell {
+      width: 110px;
+      min-height: 2.5rem;
+      cursor: pointer;
+      user-select: none;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      transition: background 0.15s ease;
+    }
+
+    .date-cell.empty {
+      background: var(--surface);
+    }
+
+    .date-cell.filled {
+      background: var(--filled);
+    }
+
+    /* Current pipeline stage: neutral bar — avoids looking like focus / edit state */
+    .date-cell.active-stage {
+      box-shadow: inset 3px 0 0 var(--text);
+      background: var(--filled);
+    }
+
+    .date-cell.active-stage.filled {
+      background: var(--filled);
+    }
+
+    .date-cell .date-inline-input {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      font: inherit;
+      font-variant-numeric: tabular-nums;
+      padding: 4px 2px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+      cursor: text;
+    }
+
+    .date-cell .date-inline-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .actions-cell {
+      width: 72px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 0.75rem;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: var(--text);
+      color: var(--surface);
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 50;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ---------------------------------- */
+    /* Responsive                          */
+    /* ---------------------------------- */
+
+    @media (max-width: 720px) {
+      .stats-bar {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 420px) {
+      .stats-bar {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .toolbar-group {
+        justify-content: stretch;
+      }
+      .toolbar-group button {
+        flex: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>Job & Volunteer Applications</h1>
+
+    <div class="stats-bar">
+      <div class="stat-card total">
+        <span class="stat-value" id="statTotal">0</span>
+        <span class="stat-label">Total</span>
+      </div>
+      <div class="stat-card observing">
+        <span class="stat-value" id="statObserving">0</span>
+        <span class="stat-label">Observing</span>
+      </div>
+      <div class="stat-card editing">
+        <span class="stat-value" id="statEditing">0</span>
+        <span class="stat-label">修改中</span>
+      </div>
+      <div class="stat-card submitted">
+        <span class="stat-value" id="statSubmitted">0</span>
+        <span class="stat-label">已投递</span>
+      </div>
+      <div class="stat-card passed">
+        <span class="stat-value" id="statPassed">0</span>
+        <span class="stat-label">已通过</span>
+      </div>
+      <div class="stat-card rate">
+        <span class="stat-value" id="statRate">0%</span>
+        <span class="stat-label">通过率</span>
+      </div>
+    </div>
+
+    <div class="progress-track" id="progressTrack">
+      <div class="progress-seg seg-none" id="segNone"></div>
+      <div class="progress-seg seg-observing" id="segObserving"></div>
+      <div class="progress-seg seg-editing" id="segEditing"></div>
+      <div class="progress-seg seg-submitted" id="segSubmitted"></div>
+      <div class="progress-seg seg-passed" id="segPassed"></div>
+    </div>
+
+    <div class="progress-legend">
+      <span class="legend-item"><span class="legend-dot dot-none"></span>未开始</span>
+      <span class="legend-item"><span class="legend-dot dot-observing"></span>Observing</span>
+      <span class="legend-item"><span class="legend-dot dot-editing"></span>修改中</span>
+      <span class="legend-item"><span class="legend-dot dot-submitted"></span>已投递</span>
+      <span class="legend-item"><span class="legend-dot dot-passed"></span>已通过</span>
+    </div>
+
+    <div class="toolbar">
+      <div class="toolbar-group">
+        <button type="button" id="exportBtn">导出 JSON 备份</button>
+        <button type="button" id="importBtn">导入 JSON</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none" />
+      </div>
+      <button type="button" class="primary" id="addRow">Add row</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Application</th>
+          <th>Observing</th>
+          <th>修改中</th>
+          <th>已投递</th>
+          <th>已通过</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <p class="hint">
+    Empty date: click to set today. Filled date: click to edit.
+    数据保存在本地 <code>data.db</code>（SQLite 文件），不依赖浏览器缓存。
+  </p>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    (function () {
+      const STAGE_KEYS = ["observing", "editing", "submitted", "passed"];
+
+      let rows = [];
+
+      const tbody = document.getElementById("tbody");
+      const toast = document.getElementById("toast");
+
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add("show");
+        clearTimeout(toast._t);
+        toast._t = setTimeout(function () {
+          toast.classList.remove("show");
+        }, 2200);
+      }
+
+      // ---------------------------------- //
+      // API helpers                          //
+      // ---------------------------------- //
+
+      async function apiGetRows() {
+        const res = await fetch("/api/rows");
+        return res.json();
+      }
+
+      async function apiAddRow() {
+        const res = await fetch("/api/rows", { method: "POST" });
+        return res.json();
+      }
+
+      async function apiUpdateRow(id, patch) {
+        const res = await fetch("/api/rows/" + encodeURIComponent(id), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        return res.json();
+      }
+
+      async function apiDeleteRow(id) {
+        await fetch("/api/rows/" + encodeURIComponent(id), { method: "DELETE" });
+      }
+
+      async function apiImport(importedRows, mode) {
+        const res = await fetch("/api/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rows: importedRows, mode: mode }),
+        });
+        return res.json();
+      }
+
+      function lastFilledStageIndex(stages) {
+        let idx = -1;
+        STAGE_KEYS.forEach(function (key, i) {
+          if (stages[key]) idx = i;
+        });
+        return idx;
+      }
+
+      function todayISO() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return y + "-" + m + "-" + day;
+      }
+
+      // ---------------------------------- //
+      // Stats + progress visualization       //
+      // ---------------------------------- //
+
+      function setStat(id, value) {
+        const el = document.getElementById(id);
+        const str = String(value);
+        if (el.textContent !== str) {
+          el.textContent = str;
+          el.classList.remove("pop");
+          void el.offsetWidth; // restart animation
+          el.classList.add("pop");
+        }
+      }
+
+      function setSegWidth(id, count, denom) {
+        const pct = denom > 0 ? (count / denom) * 100 : 0;
+        document.getElementById(id).style.width = pct + "%";
+      }
+
+      function updateStats() {
+        let total = 0;
+        let cumObserving = 0, cumEditing = 0, cumSubmitted = 0, cumPassed = 0;
+        let curNone = 0, curObserving = 0, curEditing = 0, curSubmitted = 0, curPassed = 0;
+
+        rows.forEach(function (row) {
+          const idx = lastFilledStageIndex(row.stages);
+          if (!row.name.trim() && idx === -1) return;
+
+          total++;
+          if (row.stages.observing) cumObserving++;
+          if (row.stages.editing) cumEditing++;
+          if (row.stages.submitted) cumSubmitted++;
+          if (row.stages.passed) cumPassed++;
+
+          switch (idx) {
+            case 3: curPassed++; break;
+            case 2: curSubmitted++; break;
+            case 1: curEditing++; break;
+            case 0: curObserving++; break;
+            default: curNone++; break;
+          }
+        });
+
+        setStat("statTotal", total);
+        setStat("statObserving", cumObserving);
+        setStat("statEditing", cumEditing);
+        setStat("statSubmitted", cumSubmitted);
+        setStat("statPassed", cumPassed);
+
+        const rate = cumSubmitted > 0 ? Math.round((cumPassed / cumSubmitted) * 100) : 0;
+        setStat("statRate", rate + "%");
+
+        const denom = total || 1;
+        setSegWidth("segNone", curNone, denom);
+        setSegWidth("segObserving", curObserving, denom);
+        setSegWidth("segEditing", curEditing, denom);
+        setSegWidth("segSubmitted", curSubmitted, denom);
+        setSegWidth("segPassed", curPassed, denom);
+      }
+
+      // ---------------------------------- //
+      // Rendering                            //
+      // ---------------------------------- //
+
+      async function reload() {
+        rows = await apiGetRows();
+        render();
+      }
+
+      function render() {
+        tbody.innerHTML = "";
+        rows.forEach(function (row) {
+          const tr = document.createElement("tr");
+          const activeIdx = lastFilledStageIndex(row.stages);
+
+          const nameTd = document.createElement("td");
+          nameTd.className = "name-cell";
+          const nameWrap = document.createElement("div");
+
+          const nameDisplay = document.createElement("div");
+          nameDisplay.className = "name-display" + (row.name.trim() ? "" : " empty");
+          nameDisplay.textContent = row.name.trim() || "Untitled (click to edit)";
+          nameDisplay.title = "Click to edit name";
+
+          const linkEl = document.createElement("div");
+          linkEl.className = "name-link";
+          if (row.url) {
+            const a = document.createElement("a");
+            a.href = row.url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = "Open link";
+            linkEl.appendChild(a);
+          }
+
+          const urlRow = document.createElement("div");
+          urlRow.className = "url-row";
+          const urlLabel = document.createElement("label");
+          urlLabel.htmlFor = "url-" + row.id;
+          urlLabel.textContent = "Link (optional)";
+          const urlInput = document.createElement("input");
+          urlInput.type = "url";
+          urlInput.className = "url-input";
+          urlInput.id = "url-" + row.id;
+          urlInput.placeholder = "https://…";
+          urlInput.value = row.url || "";
+
+          urlRow.appendChild(urlLabel);
+          urlRow.appendChild(urlInput);
+
+          nameDisplay.addEventListener("click", function () {
+            nameTd.classList.add("editing");
+            const input = document.createElement("input");
+            input.type = "text";
+            input.className = "name-edit";
+            input.value = row.name;
+            input.placeholder = "Application name";
+            nameWrap.replaceChild(input, nameDisplay);
+            input.focus();
+            input.select();
+
+            async function leaveEdit() {
+              if (!nameTd.isConnected) return;
+              const newName = input.value;
+              const newUrl = urlInput.value.trim();
+              if (newName === row.name && newUrl === row.url) {
+                nameTd.classList.remove("editing");
+                render();
+                return;
+              }
+              row.name = newName;
+              row.url = newUrl;
+              await apiUpdateRow(row.id, { name: newName, url: newUrl });
+              nameTd.classList.remove("editing");
+              render();
+            }
+
+            function onFocusOut() {
+              setTimeout(function () {
+                if (!nameTd.isConnected) return;
+                if (!nameWrap.contains(document.activeElement)) {
+                  leaveEdit();
+                }
+              }, 0);
+            }
+
+            nameWrap.addEventListener("focusout", onFocusOut);
+
+            input.addEventListener("keydown", function (e) {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                input.blur();
+              }
+              if (e.key === "Escape") {
+                nameTd.classList.remove("editing");
+                render();
+              }
+            });
+
+            urlInput.addEventListener("keydown", function (e) {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                urlInput.blur();
+              }
+              if (e.key === "Escape") {
+                nameTd.classList.remove("editing");
+                render();
+              }
+            });
+          });
+
+          nameWrap.appendChild(nameDisplay);
+          nameWrap.appendChild(urlRow);
+          nameWrap.appendChild(linkEl);
+          nameTd.appendChild(nameWrap);
+
+          tr.appendChild(nameTd);
+
+          STAGE_KEYS.forEach(function (key, colIndex) {
+            const td = document.createElement("td");
+            td.className = "date-cell";
+            const val = row.stages[key];
+            if (val) {
+              td.classList.add("filled");
+              td.textContent = val;
+            } else {
+              td.classList.add("empty");
+              td.innerHTML = "&nbsp;";
+            }
+            if (colIndex === activeIdx) {
+              td.classList.add("active-stage");
+            }
+
+            td.addEventListener("click", function (e) {
+              if (td.querySelector('input[type="date"]')) {
+                return;
+              }
+              if (!row.stages[key]) {
+                row.stages[key] = todayISO();
+                apiUpdateRow(row.id, { stages: { [key]: row.stages[key] } }).then(render);
+                return;
+              }
+
+              e.stopPropagation();
+              const inp = document.createElement("input");
+              inp.type = "date";
+              inp.className = "date-inline-input";
+              inp.value = row.stages[key];
+              td.textContent = "";
+              td.appendChild(inp);
+              inp.focus();
+              if (typeof inp.showPicker === "function") {
+                try {
+                  inp.showPicker();
+                } catch (_) {}
+              }
+
+              function commitDate() {
+                inp.removeEventListener("blur", commitDate);
+                const v = inp.value.trim();
+                row.stages[key] = v ? v : null;
+                apiUpdateRow(row.id, { stages: { [key]: row.stages[key] } }).then(function () {
+                  requestAnimationFrame(render);
+                });
+              }
+
+              inp.addEventListener("blur", commitDate);
+              inp.addEventListener("keydown", function (ev) {
+                if (ev.key === "Enter") {
+                  ev.preventDefault();
+                  inp.blur();
+                }
+                if (ev.key === "Escape") {
+                  ev.preventDefault();
+                  inp.removeEventListener("blur", commitDate);
+                  inp.blur();
+                  render();
+                }
+              });
+            });
+
+            tr.appendChild(td);
+          });
+
+          const actTd = document.createElement("td");
+          actTd.className = "actions-cell";
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "danger";
+          delBtn.textContent = "Delete";
+          delBtn.addEventListener("click", async function () {
+            await apiDeleteRow(row.id);
+            await reload();
+          });
+          actTd.appendChild(delBtn);
+          tr.appendChild(actTd);
+
+          tbody.appendChild(tr);
+        });
+
+        updateStats();
+      }
+
+      // ---------------------------------- //
+      // Toolbar actions                      //
+      // ---------------------------------- //
+
+      document.getElementById("addRow").addEventListener("click", async function () {
+        await apiAddRow();
+        await reload();
+      });
+
+      document.getElementById("exportBtn").addEventListener("click", function () {
+        const data = JSON.stringify(rows, null, 2);
+        const blob = new Blob([data], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const stamp = todayISO();
+        a.href = url;
+        a.download = "application-tracker-backup-" + stamp + ".json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("已导出备份");
+      });
+
+      document.getElementById("importBtn").addEventListener("click", function () {
+        document.getElementById("importFile").click();
+      });
+
+      document.getElementById("importFile").addEventListener("change", async function (e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          if (!Array.isArray(parsed)) throw new Error("not an array");
+
+          const replace = confirm(
+            "导入 " + parsed.length + " 条记录。\n\n" +
+            "点击「确定」= 替换当前所有数据。\n" +
+            "点击「取消」= 追加到现有数据后面。"
+          );
+          await apiImport(parsed, replace ? "replace" : "append");
+          await reload();
+          showToast("导入完成");
+        } catch (err) {
+          alert("导入失败：文件不是有效的备份 JSON。\n" + err.message);
+        } finally {
+          e.target.value = "";
+        }
+      });
+
+      reload();
+    })();
+  </script>
+</body>
+</html>

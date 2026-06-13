@@ -1,0 +1,18 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.cyanh.jobtracker
+productName: Job Tracker
+files:
+  - filter:
+      - '**/*'
+      - '!data.json'
+      - '!data.json.tmp'
+      - '!server.log'
+      - '!*.command'
+      - '!dist'
+mac:
+  category: public.app-category.productivity
+  target:
+    - dir
+electronVersion: 31.7.7
