@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page-header">
+    <h1 data-i18n="title">Job & Volunteer Applications</h1>
+
+    <div class="stats-bar">
+      <div class="stat-card total">
+        <span class="stat-value" id="statTotal">0</span>
+        <span class="stat-label" data-i18n="statTotal">Total</span>
+      </div>
+      <div class="stat-card observing">
+        <span class="stat-value" id="statObserving">0</span>
+        <span class="stat-label" data-i18n="statObserving">Observing</span>
+      </div>
+      <div class="stat-card editing">
+        <span class="stat-value" id="statEditing">0</span>
+        <span class="stat-label" data-i18n="statEditing">Editing</span>
+      </div>
+      <div class="stat-card submitted">
+        <span class="stat-value" id="statSubmitted">0</span>
+        <span class="stat-label" data-i18n="statSubmitted">Submitted</span>
+      </div>
+      <div class="stat-card passed">
+        <span class="stat-value" id="statPassed">0</span>
+        <span class="stat-label" data-i18n="statInterviewed">Interviewed</span>
+      </div>
+      <div class="stat-card rate">
+        <span class="stat-value" id="statRate">0%</span>
+        <span class="stat-label" data-i18n="statPassed">Passed</span>
+      </div>
+    </div>
+
+    <div class="progress-track" id="progressTrack">
+      <div class="progress-seg seg-none" id="segNone"></div>
+      <div class="progress-seg seg-observing" id="segObserving"></div>
+      <div class="progress-seg seg-editing" id="segEditing"></div>
+      <div class="progress-seg seg-submitted" id="segSubmitted"></div>
+      <div class="progress-seg seg-passed" id="segPassed"></div>
+    </div>
+
+    <div class="progress-legend">
+      <span class="legend-item"><span class="legend-dot dot-none"></span><span data-i18n="legendNone">Not started</span></span>
+      <span class="legend-item"><span class="legend-dot dot-observing"></span><span data-i18n="legendObserving">Observing</span></span>
+      <span class="legend-item"><span class="legend-dot dot-editing"></span><span data-i18n="legendEditing">Editing</span></span>
+      <span class="legend-item"><span class="legend-dot dot-submitted"></span><span data-i18n="legendSubmitted">Submitted</span></span>
+      <span class="legend-item"><span class="legend-dot dot-passed"></span><span data-i18n="legendInterviewed">Interviewed</span></span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-view="table" data-i18n="tabTable">Table</button>
+      <button class="tab" data-view="calendar" data-i18n="tabCalendar">Calendar</button>
+      <button class="tab" data-view="data" data-i18n="tabData">Data</button>
+    </div>
+
+    <div class="toolbar">
+      <div class="toolbar-group">
+        <button type="button" id="langToggle">中 / EN</button>
+        <button type="button" id="importJobBtn" data-i18n="importJobBtn">Import job</button>
+        <button type="button" id="exportBtn" data-i18n="exportBtn">Export JSON</button>
+        <button type="button" id="importBtn" data-i18n="importBtn">Import JSON</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none" />
+      </div>
+      <button type="button" class="primary" id="addRow" data-i18n="addRow">Add row</button>
+    </div>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div class="view active" id="view-table">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="thApplication">Application</th>
+            <th data-i18n="thObserving">Observing</th>
+            <th data-i18n="thEditing">Editing</th>
+            <th data-i18n="thSubmitted">Submitted</th>
+            <th data-i18n="thInterviewed">Interviewed</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="hint">
+      <span data-i18n="hint">Empty date: click to set today. Filled date: click to edit.</span>
+      <span data-i18n="hintStorage">Data is stored locally in <code>data.json</code>, not in the browser.</span>
+    </p>
+  </div>
+
+  <!-- CALENDAR VIEW -->
+  <div class="view" id="view-calendar">
+    <div class="cal-header">
+      <button class="cal-nav" id="calPrev">&lsaquo;</button>
+      <div class="cal-title" id="calTitle">—</div>
+      <button class="cal-nav" id="calNext">&rsaquo;</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-detail" id="calDetail">
+      <div class="cal-detail-empty" data-i18n="calHint">Click a highlighted day to see what happened.</div>
+    </div>
+  </div>
+
+  <!-- DATA VIEW -->
+  <div class="view" id="view-data">
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3 data-i18n="funnelTitle">Pipeline funnel</h3>
+        <div id="funnel"></div>
+        <div class="conv-note" id="convNote"></div>
+      </div>
+      <div class="chart-card">
+        <h3 data-i18n="barTitle">Applications by current stage</h3>
+        <div class="bars" id="bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORT JOB MODAL -->
+  <div class="modal-backdrop" id="jobModal">
+    <div class="modal">
+      <h2 data-i18n="jobModalTitle">Import job info</h2>
+      <p class="sub" data-i18n="jobModalSub">Paste the full job posting text below. Key fields will be extracted automatically.</p>
+      <textarea id="jobText" placeholder="Paste job description here…"></textarea>
+      <div class="parse-preview" id="parsePreview"></div>
+      <div class="modal-actions">
+        <button type="button" id="jobCancel" data-i18n="cancel">Cancel</button>
+        <button type="button" class="primary" id="jobParse" data-i18n="parseBtn">Extract</button>
+        <button type="button" class="primary" id="jobSave" data-i18n="saveAsRow" style="display:none">Save as row</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
